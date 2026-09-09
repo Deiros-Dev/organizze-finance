@@ -8,6 +8,8 @@ import {
   Target,
   Coins,
   Database,
+  Check,
+  TriangleAlert,
 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { brl } from '../lib/format';
@@ -17,6 +19,7 @@ import { TopBar } from '../components/TopBar';
 export function Settings() {
   const settings = useStore((s) => s.settings);
   const setSettings = useStore((s) => s.setSettings);
+  const setTheme = useStore((s) => s.setTheme);
   const operations = useStore((s) => s.operations);
   const aportes = useStore((s) => s.aportes);
   const projection = useStore((s) => s.projection);
@@ -27,10 +30,26 @@ export function Settings() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [goal, setGoal] = useState(String(settings.monthlyGoal));
   const [confirmClear, setConfirmClear] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const flash = (ok: boolean, text: string) => {
+    setMsg({ ok, text });
+    window.setTimeout(() => setMsg(null), 3500);
+  };
+  const run = async (fn: () => Promise<string | null>, okText: string) => {
+    setBusy(true);
+    const err = await fn();
+    setBusy(false);
+    flash(!err, err ?? okText);
+  };
 
   const commitGoal = () => {
     const n = Number(goal.replace(/\./g, '').replace(',', '.'));
-    setSettings({ monthlyGoal: Number.isFinite(n) && n >= 0 ? n : 0 });
+    void run(
+      () => setSettings({ monthlyGoal: Number.isFinite(n) && n >= 0 ? n : 0 }),
+      'Meta salva.',
+    );
   };
 
   const exportData = () => {
@@ -51,9 +70,9 @@ export function Settings() {
     reader.onload = () => {
       try {
         const data = JSON.parse(String(reader.result));
-        importData(data);
+        void run(() => importData(data), 'Dados importados.');
       } catch {
-        alert('Arquivo inválido.');
+        flash(false, 'Arquivo inválido.');
       }
     };
     reader.readAsText(file);
@@ -70,7 +89,7 @@ export function Settings() {
             <div className="text-sm text-ink">Tema</div>
             <Segmented
               value={settings.theme}
-              onChange={(v) => setSettings({ theme: v })}
+              onChange={setTheme}
               options={[
                 { value: 'dark', label: 'Escuro', icon: <Moon size={15} /> },
                 { value: 'light', label: 'Claro', icon: <Sun size={15} /> },
@@ -81,7 +100,7 @@ export function Settings() {
             <div className="text-sm text-ink">Exibição da moeda</div>
             <Segmented
               value={settings.currencyDisplay}
-              onChange={(v) => setSettings({ currencyDisplay: v })}
+              onChange={(v) => void run(() => setSettings({ currencyDisplay: v }), 'Salvo.')}
               options={[
                 { value: 'symbol', label: 'R$', icon: <Coins size={15} /> },
                 { value: 'code', label: 'BRL' },
@@ -105,7 +124,7 @@ export function Settings() {
                 onChange={(e) => setGoal(e.target.value)}
                 onBlur={commitGoal}
               />
-              <Button variant="primary" onClick={commitGoal}>
+              <Button variant="primary" onClick={commitGoal} disabled={busy}>
                 <Target size={16} />
                 Salvar
               </Button>
@@ -117,19 +136,27 @@ export function Settings() {
         <Card className="flex flex-col gap-4 p-5">
           <SectionTitle>Dados</SectionTitle>
           <p className="text-[13px] text-muted">
-            {operations.length} operações e {aportes.length} aportes salvos neste
-            navegador. Faça backup exportando o JSON.
+            {operations.length} operações e {aportes.length} aportes no banco de dados
+            (Supabase). Exporte um JSON para ter um backup.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={exportData}>
               <Download size={16} />
               Exportar
             </Button>
-            <Button variant="outline" onClick={() => fileRef.current?.click()}>
+            <Button
+              variant="outline"
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+            >
               <Upload size={16} />
               Importar
             </Button>
-            <Button variant="outline" onClick={loadSample}>
+            <Button
+              variant="outline"
+              onClick={() => void run(loadSample, 'Dados de exemplo adicionados.')}
+              disabled={busy}
+            >
               <Database size={16} />
               Dados de exemplo
             </Button>
@@ -146,36 +173,45 @@ export function Settings() {
             />
           </div>
 
+          {msg && (
+            <div
+              className={cx(
+                'flex items-center gap-2 rounded-lg border px-3 py-2 text-[13px]',
+                msg.ok
+                  ? 'border-positive/30 bg-positive-soft text-positive'
+                  : 'border-negative/30 bg-negative-soft text-negative',
+              )}
+            >
+              {msg.ok ? <Check size={15} /> : <TriangleAlert size={15} />}
+              {msg.text}
+            </div>
+          )}
+
           <div className="border-t border-line pt-4">
             {confirmClear ? (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[13px] text-negative">
-                  Apagar todas as operações e aportes?
+                  Apagar todas as operações e aportes do banco?
                 </span>
                 <Button
                   variant="danger"
                   size="sm"
+                  disabled={busy}
                   onClick={() => {
-                    clearAll();
                     setConfirmClear(false);
+                    void run(clearAll, 'Tudo apagado.');
                   }}
                 >
                   Sim, apagar tudo
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirmClear(false)}
-                >
+                <Button variant="ghost" size="sm" onClick={() => setConfirmClear(false)}>
                   Cancelar
                 </Button>
               </div>
             ) : (
               <button
                 onClick={() => setConfirmClear(true)}
-                className={cx(
-                  'inline-flex items-center gap-2 text-[13px] font-medium text-negative hover:underline',
-                )}
+                className="inline-flex items-center gap-2 text-[13px] font-medium text-negative hover:underline"
               >
                 <Trash2 size={15} />
                 Limpar todos os dados
@@ -185,7 +221,7 @@ export function Settings() {
         </Card>
 
         <p className="px-1 text-center text-[12px] text-faint">
-          Banca · Day Trade — dados salvos localmente no seu navegador.
+          Banca · Day Trade — dados no Supabase, preferências de tela neste navegador.
         </p>
       </div>
     </>

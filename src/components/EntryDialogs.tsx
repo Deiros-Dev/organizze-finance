@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trash2, TriangleAlert } from 'lucide-react';
 import type { Aporte, Operation } from '../types';
 import { useStore } from '../lib/store';
 import { todayISO } from '../lib/format';
@@ -11,6 +11,15 @@ const toInput = (n: number) =>
 
 /** "1.234,56" ou "1234.56" -> number */
 const fromInput = (s: string) => Number(s.replace(/\./g, '').replace(',', '.'));
+
+function ErrorNote({ children }: { children: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-negative/30 bg-negative-soft px-3 py-2 text-[13px] text-negative">
+      <TriangleAlert size={15} className="mt-0.5 shrink-0" />
+      <span>{children}</span>
+    </div>
+  );
+}
 
 /* ----------------------------- Operação ----------------------------- */
 
@@ -31,9 +40,13 @@ export function OperationDialog({
   const [kind, setKind] = useState<'win' | 'loss'>('win');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    setBusy(false);
+    setErr(null);
     if (editing) {
       setDate(editing.date);
       setKind(editing.result < 0 ? 'loss' : 'win');
@@ -50,12 +63,27 @@ export function OperationDialog({
   const parsed = fromInput(amount);
   const valid = Number.isFinite(parsed) && parsed > 0 && !!date;
 
-  const submit = () => {
-    if (!valid) return;
+  const submit = async () => {
+    if (!valid || busy) return;
     const result = kind === 'loss' ? -Math.abs(parsed) : Math.abs(parsed);
-    if (editing) updateOperation(editing.id, { date, result, note: note.trim() });
-    else addOperation({ date, result, note: note.trim() });
-    onClose();
+    setBusy(true);
+    setErr(null);
+    const error = editing
+      ? await updateOperation(editing.id, { date, result, note: note.trim() })
+      : await addOperation({ date, result, note: note.trim() });
+    setBusy(false);
+    if (error) setErr(error);
+    else onClose();
+  };
+
+  const remove = async () => {
+    if (!editing || busy) return;
+    setBusy(true);
+    setErr(null);
+    const error = await removeOperation(editing.id);
+    setBusy(false);
+    if (error) setErr(error);
+    else onClose();
   };
 
   return (
@@ -67,23 +95,16 @@ export function OperationDialog({
       footer={
         <>
           {editing && (
-            <Button
-              variant="danger"
-              className="mr-auto"
-              onClick={() => {
-                removeOperation(editing.id);
-                onClose();
-              }}
-            >
+            <Button variant="danger" className="mr-auto" onClick={remove} disabled={busy}>
               <Trash2 size={16} />
               Excluir
             </Button>
           )}
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
             Cancelar
           </Button>
-          <Button variant="primary" onClick={submit} disabled={!valid}>
-            {editing ? 'Salvar' : 'Adicionar'}
+          <Button variant="primary" onClick={submit} disabled={!valid || busy}>
+            {busy ? 'Salvando…' : editing ? 'Salvar' : 'Adicionar'}
           </Button>
         </>
       }
@@ -92,9 +113,10 @@ export function OperationDialog({
         className="flex flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault();
-          submit();
+          void submit();
         }}
       >
+        {err && <ErrorNote>{err}</ErrorNote>}
         <Field label="Resultado">
           <Segmented
             value={kind}
@@ -153,9 +175,13 @@ export function AporteDialog({
   const [date, setDate] = useState(todayISO());
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    setBusy(false);
+    setErr(null);
     if (editing) {
       setDate(editing.date);
       setAmount(toInput(editing.amount));
@@ -170,12 +196,27 @@ export function AporteDialog({
   const parsed = fromInput(amount);
   const valid = Number.isFinite(parsed) && parsed > 0 && !!date;
 
-  const submit = () => {
-    if (!valid) return;
+  const submit = async () => {
+    if (!valid || busy) return;
     const amt = Math.abs(parsed);
-    if (editing) updateAporte(editing.id, { date, amount: amt, note: note.trim() });
-    else addAporte({ date, amount: amt, note: note.trim() });
-    onClose();
+    setBusy(true);
+    setErr(null);
+    const error = editing
+      ? await updateAporte(editing.id, { date, amount: amt, note: note.trim() })
+      : await addAporte({ date, amount: amt, note: note.trim() });
+    setBusy(false);
+    if (error) setErr(error);
+    else onClose();
+  };
+
+  const remove = async () => {
+    if (!editing || busy) return;
+    setBusy(true);
+    setErr(null);
+    const error = await removeAporte(editing.id);
+    setBusy(false);
+    if (error) setErr(error);
+    else onClose();
   };
 
   return (
@@ -187,23 +228,16 @@ export function AporteDialog({
       footer={
         <>
           {editing && (
-            <Button
-              variant="danger"
-              className="mr-auto"
-              onClick={() => {
-                removeAporte(editing.id);
-                onClose();
-              }}
-            >
+            <Button variant="danger" className="mr-auto" onClick={remove} disabled={busy}>
               <Trash2 size={16} />
               Excluir
             </Button>
           )}
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
             Cancelar
           </Button>
-          <Button variant="primary" onClick={submit} disabled={!valid}>
-            {editing ? 'Salvar' : 'Adicionar'}
+          <Button variant="primary" onClick={submit} disabled={!valid || busy}>
+            {busy ? 'Salvando…' : editing ? 'Salvar' : 'Adicionar'}
           </Button>
         </>
       }
@@ -212,9 +246,10 @@ export function AporteDialog({
         className="flex flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault();
-          submit();
+          void submit();
         }}
       >
+        {err && <ErrorNote>{err}</ErrorNote>}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Valor (R$)">
             <Input

@@ -25,6 +25,7 @@ export function Dashboard() {
   const settings = useStore((s) => s.settings);
   const setView = useStore((s) => s.setView);
   const loadSample = useStore((s) => s.loadSample);
+  const status = useStore((s) => s.status);
 
   const [dialog, setDialog] = useState(false);
   const [editing, setEditing] = useState<Operation | null>(null);
@@ -65,7 +66,8 @@ export function Dashboard() {
     setDialog(true);
   };
 
-  const empty = operations.length === 0 && aportes.length === 0;
+  const empty =
+    status === 'ready' && operations.length === 0 && aportes.length === 0;
 
   return (
     <>
@@ -92,7 +94,7 @@ export function Dashboard() {
           <EmptyState icon={<Wallet size={20} />} title="Sua banca está zerada">
             Adicione seu primeiro aporte e comece a registrar as operações — ou
             <button
-              onClick={loadSample}
+              onClick={() => void loadSample()}
               className="mx-1 font-medium text-accent underline-offset-2 hover:underline"
             >
               carregue dados de exemplo
