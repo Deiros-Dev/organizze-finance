@@ -1,14 +1,28 @@
 // Aplica os arquivos .sql de supabase/migrations no banco.
-// Uso: DATABASE_URL="postgres://..." node scripts/migrate.mjs
-// (ou defina POSTGRES_URL_NON_POOLING / POSTGRES_URL no ambiente)
+// Uso: npm run db:migrate   (le DATABASE_URL de .env.local ou .env)
+// ou:  DATABASE_URL="postgres://..." node scripts/migrate.mjs
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const dir = join(here, '..', 'supabase', 'migrations');
+const root = join(here, '..');
+const dir = join(root, 'supabase', 'migrations');
+
+// Carrega .env.local / .env sem dependencia externa.
+for (const name of ['.env.local', '.env']) {
+  const file = join(root, name);
+  if (!existsSync(file)) continue;
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
+    if (!m) continue;
+    const key = m[1];
+    let val = m[2].trim().replace(/^["']|["']$/g, '');
+    if (!(key in process.env)) process.env[key] = val;
+  }
+}
 
 const conn =
   process.env.DATABASE_URL ||
@@ -17,7 +31,7 @@ const conn =
 
 if (!conn) {
   console.error(
-    'Defina DATABASE_URL (ou POSTGRES_URL_NON_POOLING) no ambiente antes de rodar.',
+    'Defina DATABASE_URL em .env.local (Supabase -> Settings -> Database -> Connection string).',
   );
   process.exit(1);
 }
