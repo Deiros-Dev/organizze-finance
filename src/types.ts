@@ -5,6 +5,8 @@ export type Operation = {
   /** Resultado do dia em R$ — positivo = lucro, negativo = perda */
   result: number;
   note?: string;
+  /** Paths dos prints no bucket "operation-photos" */
+  photos: string[];
   createdAt: string;
 };
 

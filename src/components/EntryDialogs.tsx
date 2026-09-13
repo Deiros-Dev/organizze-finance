@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TrendingUp, TrendingDown, Trash2, TriangleAlert } from 'lucide-react';
 import type { Aporte, Operation } from '../types';
 import { useStore } from '../lib/store';
 import { todayISO } from '../lib/format';
+import { removePhotos } from '../lib/storage';
+import { PhotoPicker } from './Photos';
 import { Button, Dialog, Field, Input, Segmented } from './ui';
 
 /** número -> "1.234,56" para preencher o input */
@@ -40,8 +42,10 @@ export function OperationDialog({
   const [kind, setKind] = useState<'win' | 'loss'>('win');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const initialPhotos = useRef<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -52,16 +56,32 @@ export function OperationDialog({
       setKind(editing.result < 0 ? 'loss' : 'win');
       setAmount(toInput(Math.abs(editing.result)));
       setNote(editing.note ?? '');
+      setPhotos(editing.photos ?? []);
+      initialPhotos.current = editing.photos ?? [];
     } else {
       setDate(todayISO());
       setKind('win');
       setAmount('');
       setNote('');
+      setPhotos([]);
+      initialPhotos.current = [];
     }
   }, [open, editing]);
 
   const parsed = fromInput(amount);
   const valid = Number.isFinite(parsed) && parsed > 0 && !!date;
+
+  // Fotos enviadas nesta sessao do dialogo que nunca chegaram a ser salvas
+  // num registro (cancelou, fechou, ou excluiu a operacao) ficam orfas no bucket.
+  const discardUnsavedPhotos = () => {
+    const orphans = photos.filter((p) => !initialPhotos.current.includes(p));
+    if (orphans.length) void removePhotos(orphans);
+  };
+
+  const handleClose = () => {
+    if (!busy) discardUnsavedPhotos();
+    onClose();
+  };
 
   const submit = async () => {
     if (!valid || busy) return;
@@ -69,8 +89,8 @@ export function OperationDialog({
     setBusy(true);
     setErr(null);
     const error = editing
-      ? await updateOperation(editing.id, { date, result, note: note.trim() })
-      : await addOperation({ date, result, note: note.trim() });
+      ? await updateOperation(editing.id, { date, result, note: note.trim(), photos })
+      : await addOperation({ date, result, note: note.trim(), photos });
     setBusy(false);
     if (error) setErr(error);
     else onClose();
@@ -80,6 +100,7 @@ export function OperationDialog({
     if (!editing || busy) return;
     setBusy(true);
     setErr(null);
+    discardUnsavedPhotos();
     const error = await removeOperation(editing.id);
     setBusy(false);
     if (error) setErr(error);
@@ -89,7 +110,7 @@ export function OperationDialog({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title={editing ? 'Editar operação' : 'Nova operação'}
       description="Registre o resultado consolidado do dia."
       footer={
@@ -100,7 +121,7 @@ export function OperationDialog({
               Excluir
             </Button>
           )}
-          <Button variant="ghost" onClick={onClose} disabled={busy}>
+          <Button variant="ghost" onClick={handleClose} disabled={busy}>
             Cancelar
           </Button>
           <Button variant="primary" onClick={submit} disabled={!valid || busy}>
@@ -150,6 +171,10 @@ export function OperationDialog({
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
+        </Field>
+
+        <Field label="Fotos" hint="Prints das entradas — até 6, 8 MB cada">
+          <PhotoPicker photos={photos} onChange={setPhotos} disabled={busy} />
         </Field>
         <button type="submit" hidden />
       </form>

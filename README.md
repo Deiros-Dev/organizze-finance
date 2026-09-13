@@ -1,24 +1,31 @@
 # Banca · Day Trade
 
 Aplicativo para acompanhar a banca de day trade / opções binárias: banca em destaque,
-relatório de operações por dia, aportes e um simulador de projeção de lucro.
+dashboard diário das operações (com fotos das entradas), aportes e um simulador de
+projeção de lucro.
 
 ## Stack
 
 - **Vite + React + TypeScript**
 - **Tailwind CSS** — tema escuro (padrão) e claro, tons de preto e azul
 - **lucide-react** — ícones
-- **zustand** + `persist` — estado salvo no `localStorage` (chave `daytrade-banca`)
+- **Supabase** — Postgres (dados) + Storage (fotos das operações), acesso sem login
+  pela chave anônima
+- **zustand** + `persist` — estado em memória; só preferências de tela ficam no
+  `localStorage` (tema, parâmetros da projeção)
 - Gráficos em SVG próprio (sem dependência de biblioteca de charts)
 
 ## Rodando
 
 ```bash
 npm install
+cp .env.example .env.local   # preencha com os valores do seu projeto Supabase
+npm run db:migrate           # cria as tabelas e o bucket de fotos
 npm run dev
 ```
 
-Abre em `http://localhost:5173`.
+Abre em `http://localhost:5173`. Sem `.env.local` configurado o app mostra uma tela
+pedindo as variáveis.
 
 Outros scripts:
 
@@ -26,6 +33,7 @@ Outros scripts:
 npm run build      # build de produção em dist/
 npm run preview    # serve o build
 npm run typecheck  # checagem de tipos
+npm run db:migrate # aplica supabase/migrations/*.sql no banco
 ```
 
 ## Como funciona
@@ -36,9 +44,11 @@ npm run typecheck  # checagem de tipos
 
 ### Operações
 
-Cada registro é o **resultado consolidado de um dia** (ganho ou perda em R$). Aparece no
-relatório agrupado por mês, com subtotal, contagem de greens/reds e assertividade.
-Clique numa linha para editar ou excluir.
+Cada registro é o **resultado consolidado de um dia** (ganho ou perda em R$), com
+observação e até 6 fotos (prints das entradas). A aba mostra um dashboard por mês —
+resumo com subtotal/assertividade e gráfico de barras por dia — seguido de um card por
+dia operado com o resultado em destaque e as fotos ao lado; clique numa foto para abrir
+em tela cheia, ou no card para editar/excluir.
 
 ### Aportes
 
@@ -64,14 +74,22 @@ do mês, curva de evolução e sensibilidade à assertividade.
 
 ## Dados
 
-Tudo fica no navegador (`localStorage`). Em **Ajustes** dá para exportar/importar um
-JSON de backup, carregar dados de exemplo ou limpar tudo.
+Operações, aportes e fotos moram no Supabase (sem login — RLS liberada pela chave
+anônima; veja `supabase/migrations/`). Em **Ajustes** dá para exportar/importar um JSON
+de backup (não inclui as fotos em si, só os paths), carregar dados de exemplo ou limpar
+tudo (inclusive o bucket de fotos).
 
 ## Estrutura
 
 ```
 src/
-  lib/        store (zustand), cálculos, formatação pt-BR, dados de exemplo
-  components/ ui base, gráficos SVG, sidebar, hero da banca, diálogos
+  lib/        store (zustand + Supabase), storage (upload/URL de fotos), cálculos,
+              formatação pt-BR, dados de exemplo
+  components/ ui base, gráficos SVG, fotos (picker/tira/lightbox), sidebar, hero da
+              banca, diálogos
   pages/      Dashboard, Operações, Aportes, Projeção, Ajustes
+supabase/
+  migrations/ schema SQL (tabelas + RLS + bucket de fotos), aplicado via db:migrate
+scripts/
+  migrate.mjs roda os .sql de supabase/migrations no Postgres do projeto
 ```

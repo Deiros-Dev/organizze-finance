@@ -81,6 +81,20 @@ export function weekday(iso: string): string {
   return WEEKDAYS[parseISO(iso).getDay()];
 }
 
+const WEEKDAYS_FULL = [
+  'domingo', 'segunda-feira', 'terça-feira', 'quarta-feira',
+  'quinta-feira', 'sexta-feira', 'sábado',
+];
+
+export function weekdayFull(iso: string): string {
+  return WEEKDAYS_FULL[parseISO(iso).getDay()];
+}
+
+/** "set" */
+export function monthAbbrev(iso: string): string {
+  return MONTHS[parseISO(iso).getMonth()].slice(0, 3);
+}
+
 /** "Setembro 2025" */
 export function monthLabel(key: string): string {
   const [y, m] = key.split('-').map(Number);

@@ -7,6 +7,7 @@ import {
   Plus,
   ChevronRight,
   CandlestickChart,
+  Camera,
 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { bankrollSeries, computeTotals, groupByMonth } from '../lib/calc';
@@ -188,6 +189,12 @@ export function Dashboard() {
                         <div className="truncate text-[13px] text-muted">{op.note}</div>
                       )}
                     </div>
+                    {op.photos.length > 0 && (
+                      <span className="flex shrink-0 items-center gap-1 text-faint">
+                        <Camera size={13} />
+                        <span className="text-[12px] font-medium">{op.photos.length}</span>
+                      </span>
+                    )}
                     <ValueBadge value={op.result} />
                   </button>
                 </li>

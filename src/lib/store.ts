@@ -9,6 +9,7 @@ import type {
   View,
 } from '../types';
 import { supabase } from './supabase';
+import { clearAllPhotos, removePhotos } from './storage';
 import { sampleRows } from './sample';
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
@@ -76,7 +77,14 @@ const defaultProjection: ProjectionParams = {
 
 /* ---- mapeamento linha do banco <-> objeto do app ---- */
 
-type OpRow = { id: string; date: string; result: string | number; note: string | null; created_at: string };
+type OpRow = {
+  id: string;
+  date: string;
+  result: string | number;
+  note: string | null;
+  photos: string[] | null;
+  created_at: string;
+};
 type ApRow = { id: string; date: string; amount: string | number; note: string | null; created_at: string };
 
 const toOperation = (r: OpRow): Operation => ({
@@ -84,6 +92,7 @@ const toOperation = (r: OpRow): Operation => ({
   date: r.date,
   result: Number(r.result),
   note: r.note ?? '',
+  photos: r.photos ?? [],
   createdAt: r.created_at,
 });
 const toAporte = (r: ApRow): Aporte => ({
@@ -145,7 +154,7 @@ export const useStore = create<State & Actions>()(
       addOperation: async (op) => {
         const { data, error } = await supabase
           .from('operations')
-          .insert({ date: op.date, result: op.result, note: op.note ?? '' })
+          .insert({ date: op.date, result: op.result, note: op.note ?? '', photos: op.photos ?? [] })
           .select()
           .single();
         if (error) return msg(error);
@@ -159,6 +168,7 @@ export const useStore = create<State & Actions>()(
         if (patch.date !== undefined) row.date = patch.date;
         if (patch.result !== undefined) row.result = patch.result;
         if (patch.note !== undefined) row.note = patch.note;
+        if (patch.photos !== undefined) row.photos = patch.photos;
         const { data, error } = await supabase
           .from('operations')
           .update(row)
@@ -174,9 +184,11 @@ export const useStore = create<State & Actions>()(
         return null;
       },
       removeOperation: async (id) => {
+        const photos = get().operations.find((o) => o.id === id)?.photos ?? [];
         const { error } = await supabase.from('operations').delete().eq('id', id);
         if (error) return msg(error);
         set((s) => ({ operations: s.operations.filter((o) => o.id !== id) }));
+        if (photos.length) void removePhotos(photos);
         return null;
       },
 
@@ -265,6 +277,7 @@ export const useStore = create<State & Actions>()(
         if (o.error) return msg(o.error);
         if (a.error) return msg(a.error);
         set({ operations: [], aportes: [] });
+        void clearAllPhotos();
         return null;
       },
       importData: async (data) => {
@@ -273,6 +286,7 @@ export const useStore = create<State & Actions>()(
               date: o.date,
               result: Number(o.result),
               note: o.note ?? '',
+              photos: Array.isArray(o.photos) ? o.photos : [],
             }))
           : [];
         const aps = Array.isArray(data.aportes)
