@@ -10,6 +10,7 @@ import {
   Database,
   Check,
   TriangleAlert,
+  LogOut,
 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { brl } from '../lib/format';
@@ -26,6 +27,8 @@ export function Settings() {
   const loadSample = useStore((s) => s.loadSample);
   const clearAll = useStore((s) => s.clearAll);
   const importData = useStore((s) => s.importData);
+  const userEmail = useStore((s) => s.user?.email);
+  const signOut = useStore((s) => s.signOut);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [goal, setGoal] = useState(String(settings.monthlyGoal));
@@ -82,6 +85,18 @@ export function Settings() {
     <>
       <TopBar />
       <div className="mx-auto flex max-w-2xl flex-col gap-4 px-5 py-6 sm:px-8">
+        {/* Conta */}
+        <Card className="flex items-center justify-between gap-3 p-5">
+          <div className="min-w-0">
+            <SectionTitle>Conta</SectionTitle>
+            <p className="mt-1 truncate text-sm text-ink">{userEmail}</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void signOut()}>
+            <LogOut size={15} />
+            Sair
+          </Button>
+        </Card>
+
         {/* Aparência */}
         <Card className="flex flex-col gap-4 p-5">
           <SectionTitle>Aparência</SectionTitle>

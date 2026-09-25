@@ -4,6 +4,7 @@ import { useStore } from './lib/store';
 import { supabaseReady } from './lib/supabase';
 import { Sidebar, BottomNav } from './components/Sidebar';
 import { SetupNeeded } from './components/SetupNeeded';
+import { Auth } from './components/Auth';
 import { Dashboard } from './pages/Dashboard';
 import { Operations } from './pages/Operations';
 import { Aportes } from './pages/Aportes';
@@ -16,6 +17,8 @@ export default function App() {
   const status = useStore((s) => s.status);
   const error = useStore((s) => s.error);
   const loadData = useStore((s) => s.loadData);
+  const authStatus = useStore((s) => s.authStatus);
+  const initAuth = useStore((s) => s.initAuth);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -24,10 +27,21 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    if (supabaseReady) void loadData();
-  }, [loadData]);
+    if (!supabaseReady) return;
+    return initAuth();
+  }, [initAuth]);
 
   if (!supabaseReady) return <SetupNeeded />;
+
+  if (authStatus === 'unknown') {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-bg">
+        <Loader2 size={22} className="animate-spin text-faint" />
+      </div>
+    );
+  }
+
+  if (authStatus === 'unauthenticated') return <Auth />;
 
   return (
     <div className="flex min-h-dvh bg-bg">

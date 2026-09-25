@@ -9,8 +9,8 @@ projeção de lucro.
 - **Vite + React + TypeScript**
 - **Tailwind CSS** — tema escuro (padrão) e claro, tons de preto e azul
 - **lucide-react** — ícones
-- **Supabase** — Postgres (dados) + Storage (fotos das operações), acesso sem login
-  pela chave anônima
+- **Supabase** — Postgres (dados) + Storage (fotos das operações) + Auth
+  (e-mail/senha); cada conta tem sua própria banca, operações e aportes
 - **zustand** + `persist` — estado em memória; só preferências de tela ficam no
   `localStorage` (tema, parâmetros da projeção)
 - Gráficos em SVG próprio (sem dependência de biblioteca de charts)
@@ -74,10 +74,11 @@ do mês, curva de evolução e sensibilidade à assertividade.
 
 ## Dados
 
-Operações, aportes e fotos moram no Supabase (sem login — RLS liberada pela chave
-anônima; veja `supabase/migrations/`). Em **Ajustes** dá para exportar/importar um JSON
-de backup (não inclui as fotos em si, só os paths), carregar dados de exemplo ou limpar
-tudo (inclusive o bucket de fotos).
+Operações, aportes e fotos moram no Supabase, isolados por usuário (RLS por dono —
+`auth.uid() = user_id`; veja `supabase/migrations/`). Cada pessoa cria sua conta pelo
+próprio app (e-mail/senha) e só vê a própria banca. Em **Ajustes** dá para
+exportar/importar um JSON de backup (não inclui as fotos em si, só os paths), carregar
+dados de exemplo ou limpar tudo (inclusive as fotos da conta).
 
 ## Estrutura
 

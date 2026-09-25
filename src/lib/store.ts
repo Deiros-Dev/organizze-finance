@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { Session, User } from '@supabase/supabase-js';
 import type {
   Aporte,
   Operation,
@@ -13,6 +14,7 @@ import { clearAllPhotos, removePhotos } from './storage';
 import { sampleRows } from './sample';
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
+type AuthStatus = 'unknown' | 'authenticated' | 'unauthenticated';
 
 type State = {
   operations: Operation[];
@@ -23,11 +25,22 @@ type State = {
   sidebarCollapsed: boolean;
   status: Status;
   error: string | null;
+  session: Session | null;
+  user: User | null;
+  authStatus: AuthStatus;
 };
 
 type Result = Promise<string | null>;
 
 type Actions = {
+  initAuth: () => () => void;
+  signIn: (email: string, password: string) => Result;
+  signUp: (
+    email: string,
+    password: string,
+  ) => Promise<{ error: string | null; needsEmailConfirm: boolean }>;
+  signOut: () => Promise<void>;
+
   loadData: () => Promise<void>;
 
   addOperation: (op: Omit<Operation, 'id' | 'createdAt'>) => Result;
@@ -120,14 +133,72 @@ export const useStore = create<State & Actions>()(
       sidebarCollapsed: false,
       status: 'idle',
       error: null,
+      session: null,
+      user: null,
+      authStatus: 'unknown',
+
+      initAuth: () => {
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, newSession) => {
+          const wasAuthenticated = get().authStatus === 'authenticated';
+          set({
+            session: newSession,
+            user: newSession?.user ?? null,
+            authStatus: newSession ? 'authenticated' : 'unauthenticated',
+          });
+          if (newSession && !wasAuthenticated) {
+            void get().loadData();
+          } else if (!newSession) {
+            // Zera os dados em memória ao sair, pra próxima pessoa que logar
+            // neste aparelho não ver um flash dos dados de quem saiu.
+            set((s) => ({
+              operations: [],
+              aportes: [],
+              settings: { ...defaultSettings, theme: s.settings.theme },
+              status: 'idle',
+              error: null,
+            }));
+          }
+        });
+        return () => subscription.unsubscribe();
+      },
+
+      signIn: async (email, password) => {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        return error ? msg(error) : null;
+      },
+
+      signUp: async (email, password) => {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: window.location.origin },
+        });
+        if (error) return { error: msg(error), needsEmailConfirm: false };
+        // Supabase devolve um "sucesso" sem sessão e com identities vazio
+        // quando o e-mail já tem conta — não retorna erro, pra não vazar
+        // quais e-mails existem.
+        const alreadyRegistered = !!data.user && data.user.identities?.length === 0;
+        if (alreadyRegistered) {
+          return { error: 'Este e-mail já tem uma conta. Faça login.', needsEmailConfirm: false };
+        }
+        return { error: null, needsEmailConfirm: !data.session };
+      },
+
+      signOut: async () => {
+        await supabase.auth.signOut();
+      },
 
       loadData: async () => {
+        const uid = get().user?.id;
+        if (!uid) return;
         set({ status: 'loading', error: null });
         try {
           const [ops, aps, cfg] = await Promise.all([
             supabase.from('operations').select('*').order('date', { ascending: true }),
             supabase.from('aportes').select('*').order('date', { ascending: true }),
-            supabase.from('app_settings').select('*').eq('id', 1).maybeSingle(),
+            supabase.from('app_settings').select('*').eq('user_id', uid).maybeSingle(),
           ]);
           if (ops.error) throw ops.error;
           if (aps.error) throw aps.error;
@@ -229,12 +300,14 @@ export const useStore = create<State & Actions>()(
       },
 
       setSettings: async (patch) => {
-        const row: Record<string, unknown> = {};
+        const uid = get().user?.id;
+        if (!uid) return 'Sessão expirada. Faça login novamente.';
+        const row: Record<string, unknown> = { user_id: uid };
         if (patch.monthlyGoal !== undefined) row.monthly_goal = patch.monthlyGoal;
         if (patch.startingBankroll !== undefined) row.starting_bankroll = patch.startingBankroll;
         if (patch.currencyDisplay !== undefined) row.currency_display = patch.currencyDisplay;
         row.updated_at = new Date().toISOString();
-        const { error } = await supabase.from('app_settings').update(row).eq('id', 1);
+        const { error } = await supabase.from('app_settings').upsert(row, { onConflict: 'user_id' });
         if (error) return msg(error);
         set((s) => ({ settings: { ...s.settings, ...patch } }));
         return null;

@@ -13,5 +13,5 @@ export const supabaseReady = Boolean(url && anonKey);
 export const supabase: SupabaseClient = createClient(
   url ?? 'https://placeholder.supabase.co',
   anonKey ?? 'placeholder-anon-key',
-  { auth: { persistSession: false } },
+  { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } },
 );

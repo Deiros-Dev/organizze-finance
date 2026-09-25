@@ -6,6 +6,7 @@ import {
   Settings2,
   PanelLeftClose,
   PanelLeftOpen,
+  LogOut,
 } from 'lucide-react';
 import type { View } from '../types';
 import { useStore } from '../lib/store';
@@ -24,6 +25,8 @@ export function Sidebar() {
   const setView = useStore((s) => s.setView);
   const collapsed = useStore((s) => s.sidebarCollapsed);
   const toggle = useStore((s) => s.toggleSidebar);
+  const userEmail = useStore((s) => s.user?.email);
+  const signOut = useStore((s) => s.signOut);
 
   return (
     <aside
@@ -74,6 +77,23 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {!collapsed && userEmail && (
+        <div className="mt-2 truncate px-3 text-[11px] text-faint" title={userEmail}>
+          {userEmail}
+        </div>
+      )}
+      <button
+        onClick={() => void signOut()}
+        title={collapsed ? 'Sair' : undefined}
+        className={cx(
+          'mt-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-faint transition-colors hover:bg-negative-soft hover:text-negative',
+          collapsed && 'justify-center px-0',
+        )}
+      >
+        <LogOut size={18} />
+        {!collapsed && 'Sair'}
+      </button>
 
       <button
         onClick={toggle}

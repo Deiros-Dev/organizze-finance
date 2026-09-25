@@ -1,6 +1,10 @@
 // Aplica os arquivos .sql de supabase/migrations no banco.
 // Uso: npm run db:migrate   (le DATABASE_URL de .env.local ou .env)
 // ou:  DATABASE_URL="postgres://..." node scripts/migrate.mjs
+//
+// Mantem um ledger (public._migrations) com os arquivos ja aplicados, entao
+// rodar de novo so aplica o que ainda nao rodou — importante porque algumas
+// migracoes (ex.: 0003_auth.sql) fazem alteracoes de sentido unico.
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -60,10 +64,37 @@ const client = new pg.Client({
 
 try {
   await client.connect();
+
+  // Ledger de migracoes ja aplicadas. RLS ligada sem nenhuma policy: só a
+  // conexao direta (DATABASE_URL, dona da tabela) enxerga essa tabela —
+  // anon/authenticated via API REST nao tem acesso.
+  await client.query(`
+    create table if not exists public._migrations (
+      filename   text primary key,
+      applied_at timestamptz not null default now()
+    )
+  `);
+  await client.query('alter table public._migrations enable row level security');
+
+  const { rows } = await client.query('select filename from public._migrations');
+  const applied = new Set(rows.map((r) => r.filename));
+
   for (const f of files) {
+    if (applied.has(f)) {
+      console.log(`-> ${f} ... já aplicada`);
+      continue;
+    }
     process.stdout.write(`-> ${f} ... `);
-    await client.query(readFileSync(join(dir, f), 'utf8'));
-    console.log('ok');
+    try {
+      await client.query('begin');
+      await client.query(readFileSync(join(dir, f), 'utf8'));
+      await client.query('insert into public._migrations (filename) values ($1)', [f]);
+      await client.query('commit');
+      console.log('ok');
+    } catch (err) {
+      await client.query('rollback');
+      throw err;
+    }
   }
   console.log('\nMigracoes aplicadas com sucesso.');
 } catch (err) {

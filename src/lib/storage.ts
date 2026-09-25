@@ -20,7 +20,7 @@ export function photoUrl(path: string): string {
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
-/** Envia uma foto e devolve o path salvo no bucket. */
+/** Envia uma foto e devolve o path salvo no bucket (namespaced por usuário). */
 export async function uploadPhoto(file: File): Promise<{ path: string | null; error: string | null }> {
   if (!ACCEPTED_TYPES.includes(file.type)) {
     return { path: null, error: 'Use imagens JPG, PNG, WEBP ou GIF.' };
@@ -28,8 +28,13 @@ export async function uploadPhoto(file: File): Promise<{ path: string | null; er
   if (file.size > MAX_PHOTO_MB * 1024 * 1024) {
     return { path: null, error: `Cada foto deve ter até ${MAX_PHOTO_MB} MB.` };
   }
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const uid = session?.user.id;
+  if (!uid) return { path: null, error: 'Sessão expirada. Faça login novamente.' };
   const ext = EXT_BY_TYPE[file.type] ?? 'jpg';
-  const path = `${crypto.randomUUID()}.${ext}`;
+  const path = `${uid}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
     cacheControl: '31536000',
     upsert: false,
@@ -45,10 +50,15 @@ export async function removePhotos(paths: string[]): Promise<string | null> {
   return error ? error.message : null;
 }
 
-/** Apaga todos os arquivos do bucket (usado em "limpar todos os dados"). */
+/** Apaga todas as fotos do usuário logado (usado em "limpar todos os dados"). */
 export async function clearAllPhotos(): Promise<string | null> {
-  const { data, error } = await supabase.storage.from(BUCKET).list('', { limit: 1000 });
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const uid = session?.user.id;
+  if (!uid) return null;
+  const { data, error } = await supabase.storage.from(BUCKET).list(uid, { limit: 1000 });
   if (error) return error.message;
-  const paths = (data ?? []).map((f) => f.name).filter(Boolean);
+  const paths = (data ?? []).map((f) => f.name).filter(Boolean).map((name) => `${uid}/${name}`);
   return paths.length ? removePhotos(paths) : null;
 }
