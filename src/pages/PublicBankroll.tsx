@@ -82,8 +82,8 @@ export function PublicBankroll({ token }: { token: string }) {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {data.proofs.map((p, i) => (
                 <button key={p.photo} type="button" onClick={() => setViewing(i)} className="text-left">
-                  <div className="aspect-[3/5] overflow-hidden rounded-lg border border-line bg-surface-2">
-                    <img src={photoUrl(p.photo)} alt="" className="h-full w-full object-cover object-top" />
+                  <div className="aspect-[4/3] overflow-hidden rounded-lg border border-line bg-surface-2">
+                    <img src={photoUrl(p.photo)} alt="" className="h-full w-full object-contain" />
                   </div>
                   <div className="tnum mt-1.5 text-[12px] text-muted">
                     {dateBR(p.date)} · {brl(p.balance)}

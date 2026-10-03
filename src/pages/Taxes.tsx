@@ -3,10 +3,8 @@ import { Banknote, CalendarClock, Landmark, Receipt, TriangleAlert, Check } from
 import { useStore } from '../lib/store';
 import { monthlyTaxes } from '../lib/calc';
 import { brl, brlSigned, dateBR, monthKey, monthLabel, pct, todayISO } from '../lib/format';
-import { Button, Card, Field, Input, Toggle, cx } from '../components/ui';
+import { Card, Field, Input, Toggle, cx } from '../components/ui';
 import { TopBar } from '../components/TopBar';
-
-const PRESETS = [15, 20, 27.5];
 
 const toInput = (n: number) => String(n).replace('.', ',');
 const fromInput = (s: string) => Number(s.replace(',', '.'));
@@ -107,7 +105,7 @@ export function Taxes() {
         {/* ---------- configuração ---------- */}
         <Card className="flex flex-col gap-4 p-5">
           <h2 className="text-sm font-semibold text-ink">Regras do cálculo</h2>
-          <Field label="Alíquota do imposto" hint="Padrão 20% (day trade). Confirme com seu contador.">
+          <Field label="Alíquota do imposto" hint="Day trade: 20% sobre o lucro líquido do mês.">
             <div className="flex flex-wrap items-center gap-2">
               <div className="w-32">
                 <Input
@@ -119,20 +117,6 @@ export function Taxes() {
                 />
               </div>
               <span className="text-sm text-faint">%</span>
-              {PRESETS.map((p) => (
-                <Button
-                  key={p}
-                  size="sm"
-                  variant={p === taxRate ? 'primary' : 'outline'}
-                  disabled={busy}
-                  onClick={() => {
-                    setRate(toInput(p));
-                    void save({ taxRate: p });
-                  }}
-                >
-                  {toInput(p)}%
-                </Button>
-              ))}
             </div>
           </Field>
           <div className="flex items-center justify-between gap-4 border-t border-line pt-4">
@@ -211,10 +195,8 @@ export function Taxes() {
         <p className="flex items-start gap-2 px-1 text-[12px] leading-relaxed text-faint">
           <Landmark size={14} className="mt-0.5 shrink-0" />
           <span>
-            Estimativa: imposto sobre o resultado líquido do mês (ganhos − perdas), pago uma vez
-            ao mês até o último dia útil do mês seguinte (feriados não considerados). A alíquota
-            e o enquadramento (day trade, ganho no exterior, carnê-leão) dependem da sua
-            situação — valide com um contador antes de pagar.
+            Imposto sobre o resultado líquido do mês (ganhos − perdas), pago uma vez ao mês até o
+            último dia útil do mês seguinte (feriados não considerados).
           </span>
         </p>
       </div>

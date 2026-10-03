@@ -40,12 +40,12 @@ export function BankrollProofs({ appBankroll }: { appBankroll: number }) {
           <button
             type="button"
             onClick={() => setViewing(0)}
-            className="h-40 w-full shrink-0 overflow-hidden rounded-lg border border-line bg-surface-2 sm:w-28"
+            className="flex w-full shrink-0 items-center justify-center self-start overflow-hidden rounded-lg border border-line bg-surface-2 sm:w-64"
           >
             <img
               src={photoUrl(latest.photo)}
               alt="Print da banca na corretora"
-              className="h-full w-full object-cover object-top"
+              className="max-h-64 w-full object-contain"
             />
           </button>
           <div className="grid flex-1 gap-4 sm:grid-cols-3">
@@ -76,8 +76,8 @@ export function BankrollProofs({ appBankroll }: { appBankroll: number }) {
               onClick={() => setViewing(i + 1)}
               className="shrink-0 text-left"
             >
-              <div className="h-20 w-14 overflow-hidden rounded-md border border-line bg-surface-2">
-                <img src={photoUrl(p.photo)} alt="" className="h-full w-full object-cover object-top" />
+              <div className="h-16 w-28 overflow-hidden rounded-md border border-line bg-surface-2">
+                <img src={photoUrl(p.photo)} alt="" className="h-full w-full object-contain" />
               </div>
               <div className="tnum mt-1 text-[11px] text-faint">{dateBR(p.date).slice(0, 5)}</div>
             </button>
