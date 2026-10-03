@@ -21,12 +21,13 @@ export function Projection() {
   const operations = useStore((s) => s.operations);
   const aportes = useStore((s) => s.aportes);
   const startingBankroll = useStore((s) => s.settings.startingBankroll);
+  const taxRate = useStore((s) => s.settings.taxRate);
 
   const totals = useMemo(
     () => computeTotals(operations, aportes, startingBankroll),
     [operations, aportes, startingBankroll],
   );
-  const r = useMemo(() => project(p), [p]);
+  const r = useMemo(() => project(p, taxRate), [p, taxRate]);
 
   const belowBreakEven = p.winRate < r.breakEvenWinRate;
 
@@ -156,31 +157,31 @@ export function Projection() {
             <div className="relative grid gap-6 sm:grid-cols-2">
               <div>
                 <div className="text-xs font-medium uppercase tracking-wide text-faint">
-                  Lucro mensal projetado
+                  Lucro mensal líquido
                 </div>
                 <div
                   className={cx(
                     'tnum mt-1 text-4xl font-semibold',
-                    r.monthlyProfit >= 0 ? 'text-ink' : 'text-negative',
+                    r.netMonthlyProfit >= 0 ? 'text-ink' : 'text-negative',
                   )}
                 >
-                  {brlSigned(r.monthlyProfit)}
+                  {brlSigned(r.netMonthlyProfit)}
                 </div>
                 <div className="tnum mt-1 text-[13px] text-muted">
-                  ROI {pctSigned(r.monthlyRoi)} sobre a banca
+                  Bruto {brlSigned(r.monthlyProfit)} − imposto {brl(r.tax)} ({pct(taxRate)})
                 </div>
               </div>
               <div className="sm:border-l sm:border-line sm:pl-6">
                 <div className="text-xs font-medium uppercase tracking-wide text-faint">
-                  Lucro diário médio
+                  Lucro diário líquido
                 </div>
                 <div
                   className={cx(
                     'tnum mt-1 text-4xl font-semibold',
-                    r.dailyProfit >= 0 ? 'text-ink' : 'text-negative',
+                    r.netDailyProfit >= 0 ? 'text-ink' : 'text-negative',
                   )}
                 >
-                  {brlSigned(r.dailyProfit)}
+                  {brlSigned(r.netDailyProfit)}
                 </div>
                 <div className="tnum mt-1 text-[13px] text-muted">
                   ~{Math.round(p.opsPerMonth / p.tradingDays)} entradas/dia
@@ -199,8 +200,8 @@ export function Projection() {
             <Mini
               icon={<Wallet size={15} />}
               label="Banca no fim do mês"
-              value={brl(r.endBankroll)}
-              sub={p.compound ? 'com juros compostos' : 'sem reinvestir'}
+              value={brl(r.netEndBankroll)}
+              sub={`${p.compound ? 'com juros compostos' : 'sem reinvestir'} · já sem imposto`}
             />
             <Mini
               icon={<Percent size={15} />}
@@ -217,15 +218,15 @@ export function Projection() {
             </div>
             <p className="mb-4 text-[13px] text-muted">
               De {brl(p.bankroll)} a{' '}
-              <span className="font-medium text-ink">{brl(r.endBankroll)}</span> ao longo
-              de {p.tradingDays} pregões.
+              <span className="font-medium text-ink">{brl(r.netEndBankroll)}</span> ao longo
+              de {p.tradingDays} pregões, já descontado o imposto.
             </p>
             <AreaChart data={r.curve} height={160} />
           </Card>
 
           <Card className="p-5">
             <h3 className="text-sm font-semibold text-ink">
-              Lucro mensal por assertividade
+              Lucro mensal líquido por assertividade
             </h3>
             <p className="mb-4 text-[13px] text-muted">
               Como o resultado muda se o seu acerto variar.

@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { Session, User } from '@supabase/supabase-js';
 import type {
   Aporte,
+  BankrollProof,
   Operation,
   ProjectionParams,
   Settings,
@@ -19,6 +20,8 @@ type AuthStatus = 'unknown' | 'authenticated' | 'unauthenticated';
 type State = {
   operations: Operation[];
   aportes: Aporte[];
+  proofs: BankrollProof[];
+  shareToken: string | null;
   settings: Settings;
   projection: ProjectionParams;
   view: View;
@@ -51,7 +54,20 @@ type Actions = {
   updateAporte: (id: string, patch: Partial<Aporte>) => Result;
   removeAporte: (id: string) => Result;
 
-  setSettings: (patch: Partial<Pick<Settings, 'monthlyGoal' | 'startingBankroll' | 'currencyDisplay'>>) => Result;
+  enableShare: () => Result;
+  disableShare: () => Result;
+
+  addProof: (p: Omit<BankrollProof, 'id' | 'createdAt'>) => Result;
+  removeProof: (id: string) => Result;
+
+  setSettings: (
+    patch: Partial<
+      Pick<
+        Settings,
+        'monthlyGoal' | 'startingBankroll' | 'currencyDisplay' | 'taxRate' | 'taxCarryLosses'
+      >
+    >,
+  ) => Result;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
 
@@ -76,6 +92,8 @@ const defaultSettings: Settings = {
   monthlyGoal: 12000,
   currencyDisplay: 'symbol',
   startingBankroll: 0,
+  taxRate: 20,
+  taxCarryLosses: true,
 };
 
 const defaultProjection: ProjectionParams = {
@@ -100,6 +118,23 @@ type OpRow = {
 };
 type ApRow = { id: string; date: string; amount: string | number; note: string | null; created_at: string };
 
+type ProofRow = {
+  id: string;
+  date: string;
+  balance: string | number;
+  photo: string;
+  note: string | null;
+  created_at: string;
+};
+const toProof = (r: ProofRow): BankrollProof => ({
+  id: r.id,
+  date: r.date,
+  balance: Number(r.balance),
+  photo: r.photo,
+  note: r.note ?? '',
+  createdAt: r.created_at,
+});
+
 const toOperation = (r: OpRow): Operation => ({
   id: r.id,
   date: r.date,
@@ -119,6 +154,9 @@ const toAporte = (r: ApRow): Aporte => ({
 const msg = (e: unknown) =>
   e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : 'Erro inesperado';
 
+const sortProofs = (a: BankrollProof, b: BankrollProof) =>
+  a.date === b.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date);
+
 const sortOps = (a: { date: string; createdAt: string }, b: { date: string; createdAt: string }) =>
   a.date === b.date ? a.createdAt.localeCompare(b.createdAt) : a.date.localeCompare(b.date);
 
@@ -127,6 +165,8 @@ export const useStore = create<State & Actions>()(
     (set, get) => ({
       operations: [],
       aportes: [],
+      proofs: [],
+      shareToken: null,
       settings: defaultSettings,
       projection: defaultProjection,
       view: 'dashboard',
@@ -155,6 +195,8 @@ export const useStore = create<State & Actions>()(
             set((s) => ({
               operations: [],
               aportes: [],
+              proofs: [],
+              shareToken: null,
               settings: { ...defaultSettings, theme: s.settings.theme },
               status: 'idle',
               error: null,
@@ -195,20 +237,28 @@ export const useStore = create<State & Actions>()(
         if (!uid) return;
         set({ status: 'loading', error: null });
         try {
-          const [ops, aps, cfg] = await Promise.all([
+          const [ops, aps, cfg, prf, shr] = await Promise.all([
             supabase.from('operations').select('*').order('date', { ascending: true }),
             supabase.from('aportes').select('*').order('date', { ascending: true }),
             supabase.from('app_settings').select('*').eq('user_id', uid).maybeSingle(),
+            supabase.from('bankroll_proofs').select('*').order('date', { ascending: false }),
+            supabase.from('public_shares').select('token').maybeSingle(),
           ]);
           if (ops.error) throw ops.error;
           if (aps.error) throw aps.error;
           if (cfg.error) throw cfg.error;
+          if (prf.error) throw prf.error;
+          if (shr.error) throw shr.error;
 
           set((s) => ({
             operations: (ops.data as OpRow[]).map(toOperation).sort(sortOps),
             aportes: (aps.data as ApRow[]).map(toAporte).sort(sortOps),
+            proofs: (prf.data as ProofRow[]).map(toProof).sort(sortProofs),
+            shareToken: (shr.data?.token as string | undefined) ?? null,
             settings: {
               ...s.settings,
+              taxRate: cfg.data?.tax_rate != null ? Number(cfg.data.tax_rate) : s.settings.taxRate,
+              taxCarryLosses: cfg.data?.tax_carry_losses ?? s.settings.taxCarryLosses,
               monthlyGoal: cfg.data ? Number(cfg.data.monthly_goal) : s.settings.monthlyGoal,
               startingBankroll: cfg.data
                 ? Number(cfg.data.starting_bankroll)
@@ -299,6 +349,51 @@ export const useStore = create<State & Actions>()(
         return null;
       },
 
+      enableShare: async () => {
+        const { data, error } = await supabase
+          .from('public_shares')
+          .upsert({ user_id: get().user?.id }, { onConflict: 'user_id', ignoreDuplicates: true })
+          .select('token')
+          .maybeSingle();
+        if (error) return msg(error);
+        let token = data?.token as string | undefined;
+        if (!token) {
+          const r = await supabase.from('public_shares').select('token').single();
+          if (r.error) return msg(r.error);
+          token = r.data.token as string;
+        }
+        set({ shareToken: token });
+        return null;
+      },
+      disableShare: async () => {
+        const { error } = await supabase
+          .from('public_shares')
+          .delete()
+          .eq('user_id', get().user?.id ?? '');
+        if (error) return msg(error);
+        set({ shareToken: null });
+        return null;
+      },
+
+      addProof: async (p) => {
+        const { data, error } = await supabase
+          .from('bankroll_proofs')
+          .insert({ date: p.date, balance: p.balance, photo: p.photo, note: p.note ?? '' })
+          .select()
+          .single();
+        if (error) return msg(error);
+        set((s) => ({ proofs: [...s.proofs, toProof(data as ProofRow)].sort(sortProofs) }));
+        return null;
+      },
+      removeProof: async (id) => {
+        const photo = get().proofs.find((p) => p.id === id)?.photo;
+        const { error } = await supabase.from('bankroll_proofs').delete().eq('id', id);
+        if (error) return msg(error);
+        set((s) => ({ proofs: s.proofs.filter((p) => p.id !== id) }));
+        if (photo) void removePhotos([photo]);
+        return null;
+      },
+
       setSettings: async (patch) => {
         const uid = get().user?.id;
         if (!uid) return 'Sessão expirada. Faça login novamente.';
@@ -306,6 +401,8 @@ export const useStore = create<State & Actions>()(
         if (patch.monthlyGoal !== undefined) row.monthly_goal = patch.monthlyGoal;
         if (patch.startingBankroll !== undefined) row.starting_bankroll = patch.startingBankroll;
         if (patch.currencyDisplay !== undefined) row.currency_display = patch.currencyDisplay;
+        if (patch.taxRate !== undefined) row.tax_rate = patch.taxRate;
+        if (patch.taxCarryLosses !== undefined) row.tax_carry_losses = patch.taxCarryLosses;
         row.updated_at = new Date().toISOString();
         const { error } = await supabase.from('app_settings').upsert(row, { onConflict: 'user_id' });
         if (error) return msg(error);
@@ -343,13 +440,15 @@ export const useStore = create<State & Actions>()(
       },
       clearAll: async () => {
         const epoch = '1970-01-01T00:00:00Z';
-        const [o, a] = await Promise.all([
+        const [o, a, p] = await Promise.all([
           supabase.from('operations').delete().gte('created_at', epoch),
           supabase.from('aportes').delete().gte('created_at', epoch),
+          supabase.from('bankroll_proofs').delete().gte('created_at', epoch),
         ]);
         if (o.error) return msg(o.error);
         if (a.error) return msg(a.error);
-        set({ operations: [], aportes: [] });
+        if (p.error) return msg(p.error);
+        set({ operations: [], aportes: [], proofs: [] });
         void clearAllPhotos();
         return null;
       },

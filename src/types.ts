@@ -21,7 +21,7 @@ export type Aporte = {
 };
 
 export type Theme = 'dark' | 'light';
-export type View = 'dashboard' | 'operacoes' | 'aportes' | 'projecao' | 'ajustes';
+export type View = 'dashboard' | 'operacoes' | 'aportes' | 'projecao' | 'impostos' | 'ajustes';
 
 export type Settings = {
   theme: Theme;
@@ -29,6 +29,23 @@ export type Settings = {
   currencyDisplay: 'symbol' | 'code';
   /** Banca inicial opcional (antes de qualquer aporte). Normalmente 0. */
   startingBankroll: number;
+  /** Aliquota do imposto sobre o lucro mensal, em % */
+  taxRate: number;
+  /** Compensa prejuizo de meses anteriores no calculo do imposto */
+  taxCarryLosses: boolean;
+};
+
+/** Print da banca real na corretora, com o saldo que aparece nele. */
+export type BankrollProof = {
+  id: string;
+  /** Data ISO (yyyy-mm-dd) do print */
+  date: string;
+  /** Saldo mostrado no print, em R$ */
+  balance: number;
+  /** Path do print no bucket "operation-photos" */
+  photo: string;
+  note?: string;
+  createdAt: string;
 };
 
 export type ProjectionParams = {
@@ -55,6 +72,13 @@ export type ProjectionResult = {
   dailyProfit: number;
   monthlyRoi: number;
   endBankroll: number;
+  /** imposto sobre o lucro projetado (0 se nao houver lucro) */
+  tax: number;
+  /** lucro do mes depois do imposto */
+  netMonthlyProfit: number;
+  netDailyProfit: number;
+  /** banca no fim do mes ja descontado o imposto */
+  netEndBankroll: number;
   breakEvenWinRate: number;
   edgePerOp: number;
   wins: number;

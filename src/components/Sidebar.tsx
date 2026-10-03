@@ -3,6 +3,7 @@ import {
   CandlestickChart,
   ArrowDownToLine,
   TrendingUp,
+  Receipt,
   Settings2,
   PanelLeftClose,
   PanelLeftOpen,
@@ -17,6 +18,7 @@ const ITEMS: { view: View; label: string; icon: typeof LayoutDashboard }[] = [
   { view: 'operacoes', label: 'Operações', icon: CandlestickChart },
   { view: 'aportes', label: 'Aportes', icon: ArrowDownToLine },
   { view: 'projecao', label: 'Projeção', icon: TrendingUp },
+  { view: 'impostos', label: 'Impostos', icon: Receipt },
   { view: 'ajustes', label: 'Ajustes', icon: Settings2 },
 ];
 

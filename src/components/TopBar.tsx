@@ -8,6 +8,7 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
   operacoes: { title: 'Operações', subtitle: 'Histórico de resultados por dia' },
   aportes: { title: 'Aportes', subtitle: 'Capital investido na banca' },
   projecao: { title: 'Projeção', subtitle: 'Simule o retorno com base na sua estatística' },
+  impostos: { title: 'Impostos', subtitle: 'Quanto pagar no mês e quanto sobra para retirar' },
   ajustes: { title: 'Ajustes', subtitle: 'Preferências, meta e dados' },
 };
 

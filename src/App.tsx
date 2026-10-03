@@ -9,6 +9,8 @@ import { Dashboard } from './pages/Dashboard';
 import { Operations } from './pages/Operations';
 import { Aportes } from './pages/Aportes';
 import { Projection } from './pages/Projection';
+import { PublicBankroll } from './pages/PublicBankroll';
+import { Taxes } from './pages/Taxes';
 import { Settings } from './pages/Settings';
 
 export default function App() {
@@ -30,6 +32,9 @@ export default function App() {
     if (!supabaseReady) return;
     return initAuth();
   }, [initAuth]);
+
+  const shareToken = new URLSearchParams(window.location.search).get('share');
+  if (supabaseReady && shareToken) return <PublicBankroll token={shareToken} />;
 
   if (!supabaseReady) return <SetupNeeded />;
 
@@ -73,6 +78,7 @@ export default function App() {
         {view === 'operacoes' && <Operations />}
         {view === 'aportes' && <Aportes />}
         {view === 'projecao' && <Projection />}
+        {view === 'impostos' && <Taxes />}
         {view === 'ajustes' && <Settings />}
       </main>
       <BottomNav />

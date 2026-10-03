@@ -11,6 +11,8 @@ import {
   Check,
   TriangleAlert,
   LogOut,
+  Link2,
+  Copy,
 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { brl } from '../lib/format';
@@ -29,6 +31,9 @@ export function Settings() {
   const importData = useStore((s) => s.importData);
   const userEmail = useStore((s) => s.user?.email);
   const signOut = useStore((s) => s.signOut);
+  const shareToken = useStore((s) => s.shareToken);
+  const enableShare = useStore((s) => s.enableShare);
+  const disableShare = useStore((s) => s.disableShare);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [goal, setGoal] = useState(String(settings.monthlyGoal));
@@ -95,6 +100,46 @@ export function Settings() {
             <LogOut size={15} />
             Sair
           </Button>
+        </Card>
+
+        {/* Link público */}
+        <Card className="flex flex-col gap-3 p-5">
+          <SectionTitle>Link público</SectionTitle>
+          <p className="text-[13px] text-muted">
+            Compartilhe um link somente leitura com banca, aportes, lucro total e os prints da
+            corretora. Operações individuais e observações não aparecem.
+          </p>
+          {shareToken ? (
+            <>
+              <div className="flex gap-2">
+                <Input readOnly value={shareUrl(shareToken)} onFocus={(e) => e.currentTarget.select()} />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(shareUrl(shareToken));
+                    flash(true, 'Link copiado.');
+                  }}
+                >
+                  <Copy size={16} />
+                  Copiar
+                </Button>
+              </div>
+              <button
+                onClick={() => void run(disableShare, 'Link desativado.')}
+                disabled={busy}
+                className="self-start text-[13px] font-medium text-negative hover:underline"
+              >
+                Desativar link
+              </button>
+            </>
+          ) : (
+            <div>
+              <Button variant="outline" onClick={() => void run(enableShare, 'Link criado.')} disabled={busy}>
+                <Link2 size={16} />
+                Gerar link
+              </Button>
+            </div>
+          )}
         </Card>
 
         {/* Aparência */}
@@ -242,6 +287,8 @@ export function Settings() {
     </>
   );
 }
+
+const shareUrl = (token: string) => `${window.location.origin}/?share=${token}`;
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (

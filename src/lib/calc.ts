@@ -123,6 +123,78 @@ export function groupByMonth(operations: Operation[]): MonthGroup[] {
 }
 
 /* ------------------------------------------------------------------ */
+/*  IMPOSTO                                                            */
+/* ------------------------------------------------------------------ */
+
+export type MonthTax = {
+  key: string;
+  /** resultado liquido das operacoes no mes */
+  net: number;
+  /** prejuizo de meses anteriores usado neste mes */
+  lossUsed: number;
+  /** prejuizo ainda a compensar depois deste mes */
+  lossCarry: number;
+  /** lucro sobre o qual incide o imposto */
+  base: number;
+  tax: number;
+  /** lucro do mes menos o imposto (0 se o mes foi negativo) */
+  withdrawable: number;
+  /** vencimento: ultimo dia util do mes seguinte (yyyy-mm-dd) */
+  dueDate: string;
+};
+
+/** Ultimo dia util (seg-sex) do mes seguinte a `key` (yyyy-mm). Nao considera feriados. */
+export function taxDueDate(key: string): string {
+  const [y, m] = key.split('-').map(Number);
+  const d = new Date(y, m + 1, 0); // ultimo dia do mes seguinte
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Imposto mensal sobre o resultado liquido do mes (ganhos - perdas).
+ * Mes negativo nao paga e, se `carryLosses`, o prejuizo abate o lucro dos
+ * meses seguintes. Retorna do mes mais antigo ao mais recente.
+ */
+export function monthlyTaxes(
+  operations: Operation[],
+  rate: number,
+  carryLosses: boolean,
+): MonthTax[] {
+  const nets = new Map<string, number>();
+  for (const o of operations) {
+    const k = monthKey(o.date);
+    nets.set(k, (nets.get(k) ?? 0) + o.result);
+  }
+  let carry = 0;
+  return [...nets.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, rawNet]) => {
+      const net = Math.round(rawNet * 100) / 100;
+      let lossUsed = 0;
+      if (net < 0) {
+        if (carryLosses) carry += -net;
+      } else if (carryLosses) {
+        lossUsed = Math.min(carry, net);
+        carry -= lossUsed;
+      }
+      const base = Math.max(0, net - lossUsed);
+      const tax = Math.round(base * (rate / 100) * 100) / 100;
+      return {
+        key,
+        net,
+        lossUsed,
+        lossCarry: carry,
+        base,
+        tax,
+        withdrawable: net > 0 ? net - tax : 0,
+        dueDate: taxDueDate(key),
+      };
+    });
+}
+
+/* ------------------------------------------------------------------ */
 /*  PROJECAO                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -135,7 +207,7 @@ export function groupByMonth(operations: Operation[]): MonthGroup[] {
  *
  * Ponto de equilibrio (EV = 0):  acerto = 1 / (1 + payout)
  */
-export function project(p: ProjectionParams): ProjectionResult {
+export function project(p: ProjectionParams, taxRate = 0): ProjectionResult {
   const bankroll = Math.max(0, p.bankroll);
   const risk = p.riskPerOp / 100;
   const win = clamp(p.winRate / 100, 0, 1);
@@ -172,6 +244,13 @@ export function project(p: ProjectionParams): ProjectionResult {
     for (let d = 1; d <= days; d++) curve.push(bankroll + (monthlyProfit / days) * d);
   }
 
+  const taxOn = (profit: number) => (profit > 0 ? profit * (taxRate / 100) : 0);
+  const tax = taxOn(monthlyProfit);
+  const netMonthlyProfit = monthlyProfit - tax;
+  // A curva acompanha o lucro liquido, pra terminar na banca ja sem imposto.
+  const netScale = monthlyProfit > 0 ? netMonthlyProfit / monthlyProfit : 1;
+  const netCurve = curve.map((v) => bankroll + (v - bankroll) * netScale);
+
   const scenarioRates = dedupe([
     Math.round(p.winRate) - 10,
     Math.round(p.winRate) - 5,
@@ -184,9 +263,12 @@ export function project(p: ProjectionParams): ProjectionResult {
     const e = (r / 100) * payout - (1 - r / 100);
     return {
       winRate: r,
-      monthlyProfit: p.compound
-        ? bankroll * Math.pow(1 + risk * e, ops) - bankroll
-        : stake * e * ops,
+      monthlyProfit: (() => {
+        const gross = p.compound
+          ? bankroll * Math.pow(1 + risk * e, ops) - bankroll
+          : stake * e * ops;
+        return gross - taxOn(gross);
+      })(),
       current: r === Math.round(p.winRate),
     };
   });
@@ -199,11 +281,15 @@ export function project(p: ProjectionParams): ProjectionResult {
     dailyProfit: monthlyProfit / days,
     monthlyRoi: bankroll ? (monthlyProfit / bankroll) * 100 : 0,
     endBankroll,
+    tax,
+    netMonthlyProfit,
+    netDailyProfit: netMonthlyProfit / days,
+    netEndBankroll: bankroll + netMonthlyProfit,
     breakEvenWinRate: payout > 0 ? (1 / (1 + payout)) * 100 : 100,
     edgePerOp,
     wins: Math.round(ops * win),
     losses: ops - Math.round(ops * win),
-    curve,
+    curve: netCurve,
     scenarios,
   };
 }

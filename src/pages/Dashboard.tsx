@@ -15,6 +15,7 @@ import { brl, brlSigned, dayMonth, pct, weekday } from '../lib/format';
 import { BankrollHero } from '../components/BankrollHero';
 import { StatCard } from '../components/StatCard';
 import { ValueBadge } from '../components/ValueBadge';
+import { BankrollProofs } from '../components/BankrollProofs';
 import { OperationDialog } from '../components/EntryDialogs';
 import { Button, Card, EmptyState, cx } from '../components/ui';
 import { TopBar } from '../components/TopBar';
@@ -145,6 +146,8 @@ export function Dashboard() {
             sub={`${totals.wins} ${totals.wins === 1 ? 'green' : 'greens'} · ${totals.losses} ${totals.losses === 1 ? 'red' : 'reds'}`}
           />
         </div>
+
+        <BankrollProofs appBankroll={totals.bankroll} />
 
         <Card>
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
